@@ -1,0 +1,118 @@
+import pandas as pd
+import matplotlib.pyplot as plt
+from autogluon.timeseries import TimeSeriesPredictor, TimeSeriesDataFrame
+import yfinance as yf
+
+# Function to fetch stock data
+def fetch_stock_data(symbol):
+    data = yf.download(symbol, start="2005-10-19", end="2024-05-20")
+    data.reset_index(inplace=True)  # Reset index to get 'Date' as a column
+    return data
+
+# Fetch stock data and plot to verify
+stock_symbol = "SUZLON.NS"
+stock_data = fetch_stock_data(stock_symbol)
+
+plt.figure(figsize=(14, 7))
+plt.plot(stock_data['Date'], stock_data['Close'], label='Close Prices', color='blue')
+plt.title('Fetched Stock Data')
+plt.xlabel('Date')
+plt.ylabel('Close Price')
+plt.legend()
+plt.grid(True)
+plt.show()
+
+# Function to prepare stock data in the required format for AutoGluon
+def prepare_data(stock_data, stock_symbol):
+    # Ensure date is in pandas datetime format
+    stock_data['Date'] = pd.to_datetime(stock_data['Date'])
+    # Add item_id column to identify the time series
+    stock_data['item_id'] = stock_symbol
+    # Rename columns to match AutoGluon's expectations
+    stock_data.rename(columns={'Date': 'timestamp', 'Close': 'price'}, inplace=True)
+    # Select and reorder columns
+    stock_data = stock_data[['item_id', 'timestamp', 'price']]
+    # Convert to TimeSeriesDataFrame
+    stock_data = TimeSeriesDataFrame(stock_data)
+    return stock_data
+
+# Prepare the data and plot to verify
+prepared_data = prepare_data(stock_data, stock_symbol)
+
+plt.figure(figsize=(14, 7))
+plt.plot(prepared_data.index.get_level_values('timestamp'), prepared_data['price'], label='Prepared Prices', color='blue')
+plt.title('Prepared Stock Data')
+plt.xlabel('Date')
+plt.ylabel('Price')
+plt.legend()
+plt.grid(True)
+plt.show()
+
+# Function to train the model and forecast
+def train_and_forecast(stock_symbol, forecast_periods=200):
+    # Fetch stock data
+    stock_data = fetch_stock_data(stock_symbol)
+    
+    # Prepare the data
+    stock_data = prepare_data(stock_data, stock_symbol)
+    
+    # Initialize AutoGluon TimeSeriesPredictor
+    predictor = TimeSeriesPredictor(prediction_length=forecast_periods, target='price', freq='D')
+    
+    # Train the model
+    predictor.fit(stock_data)
+    
+    # Generate forecasts
+    forecasts = predictor.predict(stock_data)
+    
+    return stock_data, forecasts
+
+# Train and forecast, then plot to verify
+stock_data, forecasted_prices = train_and_forecast(stock_symbol)
+
+plt.figure(figsize=(14, 7))
+plt.plot(stock_data.index.get_level_values('timestamp'), stock_data['price'], label='Historical Prices', color='blue')
+forecast_mean = forecasted_prices.loc['SUZLON.NS']['mean']
+forecast_timestamps = forecast_mean.index.get_level_values('timestamp')
+plt.plot(forecast_timestamps, forecast_mean, label='Forecasted Prices', color='red')
+plt.title('Historical and Forecasted Prices')
+plt.xlabel('Date')
+plt.ylabel('Price')
+plt.legend()
+plt.grid(True)
+plt.show()
+
+# Function to plot the forecast
+def plot_forecast(stock_data, forecast_data):
+    plt.figure(figsize=(14, 7))
+    
+    # Plot historical data
+    plt.plot(stock_data.index.get_level_values('timestamp'), stock_data['price'], label='Historical Prices', color='blue')
+    
+    # Plot mean forecast
+    forecast_mean = forecast_data.loc['SUZLON.NS']['mean']
+    forecast_timestamps = forecast_mean.index.get_level_values('timestamp')
+    plt.plot(forecast_timestamps, forecast_mean, label='Forecasted Prices', color='red')
+    
+    # Add title and labels
+    plt.title('Stock Price Forecast')
+    plt.xlabel('Date')
+    plt.ylabel('Price')
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+
+# Plot the forecast to verify
+plot_forecast(stock_data, forecasted_prices)
+
+# Specify the stock symbol you want to forecast
+stock_symbol = "SUZLON.NS"
+
+# Run the forecasting function
+stock_data, forecasted_prices = train_and_forecast(stock_symbol)
+
+# Print the forecasted prices
+print(forecasted_prices)
+
+# Plot the forecast
+plot_forecast(stock_data, forecasted_prices)
